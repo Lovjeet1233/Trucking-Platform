@@ -258,7 +258,7 @@ Trucking-Platform/
 
 ## Demo
 
-A video demonstration of the application can be found at: [Demo Video Link]
+A video demonstration of the application can be found at:(https://drive.google.com/file/d/1b9QgZF2JK1C2DlPPX_S76x4L8eVzHbcp/view?usp=drive_link)
 
 ## License
 
