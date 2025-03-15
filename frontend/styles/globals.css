@@ -1,0 +1,71 @@
+
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
+    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Custom utilities */
+.min-h-screen {
+  min-height: 100vh;
+}
+
+/* Custom styles for the tracking timeline */
+.timeline-item {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 2px;
+  background-color: #e5e7eb;
+}
+
+.timeline-item:last-child::before {
+  height: 50%;
+}
+
+.timeline-dot {
+  position: absolute;
+  left: -0.5rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+}
+
+.timeline-dot.active {
+  background-color: #3b82f6;
+}
+
+.timeline-dot.completed {
+  background-color: #10b981;
+}
+
+.timeline-dot.pending {
+  background-color: #f59e0b;
+}
+
+.timeline-dot.issue {
+  background-color: #ef4444;
+}

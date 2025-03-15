@@ -1,0 +1,21 @@
+
+{
+    "appName": "Trucking Platform API",
+    "pagination": {
+      "limit": 10
+    },
+    "tracking": {
+      "updateInterval": 15 
+    },
+    "eligibilityCriteria": {
+      "truck": {
+        "maxAge": 5 
+      },
+      "license": {
+        "minYears": 5 
+      }
+    },
+    "bidding": {
+      "minDeadline": 12 
+    }
+  }
