@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAlert } from '../../context/alert/AlertContext';
-import axios from 'axios';
+import api from '../../utils/api'; // Use your configured API instance instead of axios
 import { format } from 'date-fns';
 
 const PlaceBid = () => {
@@ -14,6 +14,7 @@ const PlaceBid = () => {
   const [submitting, setSubmitting] = useState(false);
   const [load, setLoad] = useState(null);
   const [existingBid, setExistingBid] = useState(null);
+  const [checkingProfile, setCheckingProfile] = useState(true);
   
   const [formData, setFormData] = useState({
     amount: '',
@@ -24,21 +25,41 @@ const PlaceBid = () => {
 
   const { amount, proposedPickupDate, proposedDeliveryDate, notes } = formData;
 
+  // First check if the user has a trucker profile
   useEffect(() => {
-    if (loadId) {
+    const checkTruckerProfile = async () => {
+      try {
+        await api.get('/truckers/profile');
+        setCheckingProfile(false);
+      } catch (err) {
+        if (err.response?.status === 404) {
+          setAlert('You need to complete your trucker profile first', 'danger');
+          router.push('/dashboard/trucker/profile');
+        } else {
+          setAlert('Error checking trucker profile', 'danger');
+        }
+      }
+    };
+
+    checkTruckerProfile();
+  }, []);
+
+  // Then fetch load details once we know the user has a profile
+  useEffect(() => {
+    if (loadId && !checkingProfile) {
       fetchLoadDetails();
     }
-  }, [loadId]);
+  }, [loadId, checkingProfile]);
 
   const fetchLoadDetails = async () => {
     try {
       // Get load details
-      const loadRes = await axios.get(`/api/v1/loads/${loadId}`);
+      const loadRes = await api.get(`/loads/${loadId}`);
       setLoad(loadRes.data.data);
       
       // Check if the user already has a bid on this load
       try {
-        const bidsRes = await axios.get(`/api/v1/bids/load/${loadId}`);
+        const bidsRes = await api.get(`/bids/load/${loadId}`);
         if (bidsRes.data.data && bidsRes.data.data.length > 0) {
           const userBid = bidsRes.data.data[0]; // From the controller, a trucker will only get their own bid
           setExistingBid(userBid);
@@ -78,11 +99,11 @@ const PlaceBid = () => {
 
       if (existingBid) {
         // Update existing bid
-        await axios.put(`/api/v1/bids/${existingBid._id}`, formData);
+        await api.put(`/bids/${existingBid._id}`, formData);
         setAlert('Bid updated successfully', 'success');
       } else {
         // Create new bid
-        await axios.post('/api/v1/bids', bidData);
+        await api.post('/bids', bidData);
         setAlert('Bid placed successfully', 'success');
       }
       
@@ -99,7 +120,7 @@ const PlaceBid = () => {
     if (window.confirm('Are you sure you want to withdraw your bid?')) {
       try {
         setSubmitting(true);
-        await axios.put(`/api/v1/bids/${existingBid._id}/withdraw`);
+        await api.put(`/bids/${existingBid._id}/withdraw`);
         setAlert('Bid withdrawn successfully', 'success');
         router.push('/dashboard/trucker/bids');
       } catch (err) {
@@ -115,7 +136,7 @@ const PlaceBid = () => {
     return format(new Date(dateString), 'MMM d, yyyy h:mm a');
   };
 
-  if (loading) {
+  if (checkingProfile || loading) {
     return (
       <div className="flex justify-center py-8">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-900"></div>

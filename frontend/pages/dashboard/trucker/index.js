@@ -24,6 +24,25 @@ const TruckerDashboardPage = () => {
   });
   const [activeLoads, setActiveLoads] = useState([]);
   const [recentBids, setRecentBids] = useState([]);
+  const [checkingProfile, setCheckingProfile] = useState(true);
+
+  useEffect(() => {
+    const checkTruckerProfile = async () => {
+      try {
+        await api.get('/truckers/profile');
+        setCheckingProfile(false);
+      } catch (err) {
+        if (err.response?.status === 404) {
+          setAlert('Please complete your trucker profile first', 'info');
+          router.push('/dashboard/trucker/profile');
+        } else {
+          setCheckingProfile(false);
+        }
+      }
+    };
+
+    checkTruckerProfile();
+  }, []);
 
   useEffect(() => {
     fetchTruckerData();

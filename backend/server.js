@@ -65,8 +65,8 @@ app.use(hpp());
 
 // Enable CORS
 app.use(cors());
-const cors = require('cors');
-app.use(cors());
+// const cors = require('cors');
+// app.use(cors());
 // Mount routers
 app.use('/api/v1/auth', auth);
 app.use('/api/v1/shippers', shippers);

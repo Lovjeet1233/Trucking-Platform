@@ -1,4 +1,5 @@
 // routes/api/admin.js
+// /api/admin/.....
 const express = require('express');
 const router = express.Router();
 const {
@@ -24,5 +25,4 @@ router.route('/transactions')
 
 router.route('/benefits')
   .get(protect, authorize('admin'), getSystemBenefits);
-
 module.exports = router;

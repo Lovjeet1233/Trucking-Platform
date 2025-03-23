@@ -1,15 +1,15 @@
-
 // components/shipper/PostLoad.js
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAlert } from '../../context/alert/AlertContext';
-import axios from 'axios';
 import api from '../../utils/api';
+
 const PostLoad = () => {
   const { setAlert } = useAlert();
   const router = useRouter();
   
   const [loading, setLoading] = useState(false);
+  const [checkingProfile, setCheckingProfile] = useState(true);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -32,6 +32,25 @@ const PostLoad = () => {
     budget: '',
     biddingDeadline: ''
   });
+
+  // Check if shipper profile exists
+  useEffect(() => {
+    const checkShipperProfile = async () => {
+      try {
+        await api.get('/shippers/profile');
+        setCheckingProfile(false);
+      } catch (err) {
+        if (err.response?.status === 404) {
+          setAlert('You need to create a shipper profile first', 'danger');
+          router.push('/dashboard/shipper/profile');
+        } else {
+          setAlert('Error checking shipper profile', 'danger');
+        }
+      }
+    };
+
+    checkShipperProfile();
+  }, []);
 
   const {
     title,
@@ -63,22 +82,37 @@ const PostLoad = () => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
     }
   };
-
   const onSubmit = async e => {
     e.preventDefault();
     setLoading(true);
-
+  
     try {
       // Format special requirements as array
       const specialReqArray = specialRequirements
         ? specialRequirements.split(',').map(req => req.trim())
         : [];
-
+  
+      // Create load data with proper GeoJSON coordinates
       const loadData = {
         ...formData,
-        specialRequirements: specialReqArray
+        specialRequirements: specialReqArray,
+        pickupLocation: {
+          address: pickupLocation.address,
+          coordinates: {
+            type: "Point",
+            coordinates: [0, 0] // Default coordinates - replace with actual if you have them
+          }
+        },
+        deliveryLocation: {
+          address: deliveryLocation.address,
+          coordinates: {
+            type: "Point",
+            coordinates: [0, 0] // Default coordinates - replace with actual if you have them
+          }
+        }
       };
-
+  
+      // Send request
       const res = await api.post('/loads', loadData);
       
       setAlert('Load posted successfully', 'success');
@@ -89,6 +123,9 @@ const PostLoad = () => {
       setLoading(false);
     }
   };
+  if (checkingProfile) {
+    return <div className="flex justify-center items-center h-64">Loading...</div>;
+  }
 
   return (
     <div className="container mx-auto">

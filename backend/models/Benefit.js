@@ -1,4 +1,3 @@
-
 // models/Benefit.js
 const mongoose = require('mongoose');
 
