@@ -254,6 +254,49 @@ exports.getAvailableLoads = asyncHandler(async (req, res, next) => {
   });
 });
 
+// @desc    Update load status
+// @route   PUT /api/v1/loads/:id/status
+// @access  Private/Shipper
+exports.updateLoadStatus = asyncHandler(async (req, res, next) => {
+  const { status } = req.body;
+  
+  if (!status || !['open', 'cancelled'].includes(status)) {
+    return next(new ErrorResponse('Please provide a valid status (open or cancelled)', 400));
+  }
+  
+  let load = await Load.findById(req.params.id);
+  
+  if (!load) {
+    return next(new ErrorResponse(`Load not found with id of ${req.params.id}`, 404));
+  }
+  
+  // Make sure shipper is load owner
+  const shipper = await Shipper.findOne({ user: req.user.id });
+  
+  if (!shipper || load.shipper.toString() !== shipper._id.toString()) {
+    return next(new ErrorResponse(`Not authorized to update this load's status`, 403));
+  }
+  
+  // Only allow status change if load is in 'pending' status
+  if (load.status !== 'pending') {
+    return next(new ErrorResponse(`Can only update status from pending state`, 400));
+  }
+  
+  load = await Load.findByIdAndUpdate(
+    req.params.id,
+    { status },
+    {
+      new: true,
+      runValidators: true
+    }
+  );
+  
+  res.status(200).json({
+    success: true,
+    data: load
+  });
+});
+
 // @desc    Assign load to trucker
 // @route   PUT /api/v1/loads/:id/assign
 // @access  Private/Shipper
@@ -484,3 +527,5 @@ exports.cancelLoad = asyncHandler(async (req, res, next) => {
     data: load
   });
 });
+
+module.exports = exports;

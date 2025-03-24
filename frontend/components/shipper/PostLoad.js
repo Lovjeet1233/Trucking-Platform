@@ -10,14 +10,21 @@ const PostLoad = () => {
   
   const [loading, setLoading] = useState(false);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const [distance, setDistance] = useState(null);
+  const [error, setError] = useState('');
+  const [calculateLoading, setCalculateLoading] = useState(false);
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     pickupLocation: {
-      address: ''
+      address: '',
+      zipCode: ''
     },
     deliveryLocation: {
-      address: ''
+      address: '',
+      zipCode: ''
     },
     pickupDate: '',
     deliveryDate: '',
@@ -30,10 +37,14 @@ const PostLoad = () => {
     loadType: '',
     specialRequirements: '',
     budget: '',
-    biddingDeadline: ''
+    biddingDeadline: '',
+    distance: {
+      miles: '',
+      kilometers: ''
+    }
   });
 
-  // Check if shipper profile exists
+  // Load Google Maps API script
   useEffect(() => {
     const checkShipperProfile = async () => {
       try {
@@ -50,6 +61,28 @@ const PostLoad = () => {
     };
 
     checkShipperProfile();
+    
+    // Load Google Maps API script if it's not already loaded
+    if (!window.google || !window.google.maps) {
+      // Define the callback function
+      window.initMap = () => {
+        console.log("Google Maps API loaded successfully");
+        setMapsLoaded(true);
+      };
+      
+      const script = document.createElement('script');
+      // Include your API key properly in the URL
+      script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyB41DRUbKWJHPxaFjMAwdrzWzbVKartNGg&callback=initMap&v=weekly`;
+      script.async = true;
+      script.defer = true;
+      script.onerror = () => {
+        console.error("Failed to load Google Maps API");
+        setAlert('Failed to load mapping service. Distance calculation may not work properly.', 'warning');
+      };
+      document.head.appendChild(script);
+    } else {
+      setMapsLoaded(true);
+    }
   }, []);
 
   const {
@@ -82,6 +115,167 @@ const PostLoad = () => {
       setFormData({ ...formData, [e.target.name]: e.target.value });
     }
   };
+
+  // Replace the existing calculateDistance function with this improved version
+// Improved distance calculation function to fix the "p is undefined" error
+const calculateDistance = () => {
+  // Reset states
+  setDistance(null);
+  setError('');
+  setCalculateLoading(true);
+  
+  console.log("Starting distance calculation...");
+  
+  const pickupZip = pickupLocation.zipCode;
+  const deliveryZip = deliveryLocation.zipCode;
+  
+  // Basic validation
+  if (!pickupZip || !deliveryZip) {
+    setError('Please enter both pickup and delivery zip codes');
+    setCalculateLoading(false);
+    return;
+  }
+  
+  // Safety timeout to ensure loading state is reset
+  const timeoutId = setTimeout(() => {
+    console.log("Safety timeout triggered");
+    setCalculateLoading(false);
+  }, 15000);
+  
+  // Format addresses for better geocoding
+  let origin = pickupLocation.address ? 
+    `${pickupLocation.address}, ${pickupZip}` : pickupZip;
+  
+  let destination = deliveryLocation.address ? 
+    `${deliveryLocation.address}, ${deliveryZip}` : deliveryZip;
+  
+  // Check if Maps API is properly loaded with required services
+  const isGoogleMapsReady = () => {
+    return window.google && 
+           window.google.maps && 
+           window.google.maps.DistanceMatrixService;
+  };
+  
+  const calculateWithAPI = () => {
+    try {
+      console.log("Using Google Maps Distance Matrix API");
+      console.log(`Calculating distance between: ${origin} and ${destination}`);
+      
+      // Create a new instance of the Distance Matrix service
+      const service = new window.google.maps.DistanceMatrixService();
+      
+      service.getDistanceMatrix({
+        origins: [origin],
+        destinations: [destination],
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        unitSystem: window.google.maps.UnitSystem.METRIC,
+        avoidHighways: false,
+        avoidTolls: false,
+      }, handleDistanceResponse);
+    } catch (error) {
+      console.error("Error in distance calculation:", error);
+      handleError(error.message);
+    }
+  };
+  
+  const handleDistanceResponse = (response, status) => {
+    clearTimeout(timeoutId);
+    
+    if (status !== 'OK') {
+      handleError(`Google Maps API returned status: ${status}`);
+      return;
+    }
+    
+    try {
+      // Verify that we have a valid response
+      if (!response || 
+          !response.rows || 
+          !response.rows[0] || 
+          !response.rows[0].elements || 
+          !response.rows[0].elements[0]) {
+        handleError('Invalid response from Google Maps API');
+        return;
+      }
+      
+      const element = response.rows[0].elements[0];
+      
+      if (element.status !== 'OK') {
+        handleError(`Could not determine distance: ${element.status}`);
+        return;
+      }
+      
+      // Process successful response
+      const distanceInMeters = element.distance.value;
+      const distanceText = element.distance.text;
+      const durationText = element.duration.text;
+      
+      // Convert to kilometers and miles
+      const distanceInKm = distanceInMeters / 1000;
+      const distanceInMiles = distanceInKm * 0.621371;
+      
+      // Create result object
+      const distanceResult = {
+        miles: parseFloat(distanceInMiles.toFixed(2)),
+        kilometers: parseFloat(distanceInKm.toFixed(2)),
+        duration: durationText,
+        distanceText: distanceText
+      };
+      
+      // Update state
+      setDistance(distanceResult);
+      setFormData({
+        ...formData,
+        distance: distanceResult
+      });
+      
+      setAlert(`Distance calculated: ${distanceText} - Driving time: ${durationText}`, 'success');
+      setCalculateLoading(false);
+    } catch (error) {
+      console.error("Error processing distance response:", error);
+      handleError("Error processing the distance calculation results");
+    }
+  };
+  
+  const handleError = (errorMessage) => {
+    console.error(errorMessage);
+    setError(`Distance calculation error: ${errorMessage}`);
+    setCalculateLoading(false);
+    clearTimeout(timeoutId);
+  };
+  
+  // Use existing Google Maps API if available
+  if (isGoogleMapsReady()) {
+    calculateWithAPI();
+  } else {
+    // The Maps API might not be fully loaded or initialized
+    console.log("Google Maps API not ready. Loading API...");
+    
+    // Clean up any existing script to avoid conflicts
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (existingScript) {
+      existingScript.remove();
+    }
+    
+    // Define callback function to run when API loads
+    window.initMap = function() {
+      console.log("Google Maps API loaded successfully");
+      if (isGoogleMapsReady()) {
+        calculateWithAPI();
+      } else {
+        handleError("Failed to initialize Google Maps services");
+      }
+    };
+    
+    // Create and append script element
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyBVmvkILV0qNAZA1gBUitabRogCKbr4ICI&callback=initMap`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => handleError("Failed to load Google Maps API");
+    
+    document.head.appendChild(script);
+  }
+};
   const onSubmit = async e => {
     e.preventDefault();
     setLoading(true);
@@ -98,6 +292,7 @@ const PostLoad = () => {
         specialRequirements: specialReqArray,
         pickupLocation: {
           address: pickupLocation.address,
+          zipCode: pickupLocation.zipCode,
           coordinates: {
             type: "Point",
             coordinates: [0, 0] // Default coordinates - replace with actual if you have them
@@ -105,6 +300,7 @@ const PostLoad = () => {
         },
         deliveryLocation: {
           address: deliveryLocation.address,
+          zipCode: deliveryLocation.zipCode,
           coordinates: {
             type: "Point",
             coordinates: [0, 0] // Default coordinates - replace with actual if you have them
@@ -123,6 +319,7 @@ const PostLoad = () => {
       setLoading(false);
     }
   };
+  
   if (checkingProfile) {
     return <div className="flex justify-center items-center h-64">Loading...</div>;
   }
@@ -282,67 +479,141 @@ const PostLoad = () => {
 
           {/* Locations and Dates */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label htmlFor="pickupLocation.address" className="block text-sm font-medium text-gray-700 mb-1">
-                Pickup Location
-              </label>
-              <input
-                type="text"
-                id="pickupLocation.address"
-                name="pickupLocation.address"
-                value={pickupLocation.address}
-                onChange={onChange}
-                required
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Full pickup address"
-              />
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="pickupLocation.address" className="block text-sm font-medium text-gray-700 mb-1">
+                  Pickup Location
+                </label>
+                <input
+                  type="text"
+                  id="pickupLocation.address"
+                  name="pickupLocation.address"
+                  value={pickupLocation.address}
+                  onChange={onChange}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Full pickup address"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="pickupLocation.zipCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  Pickup Zip Code
+                </label>
+                <input
+                  type="text"
+                  id="pickupLocation.zipCode"
+                  name="pickupLocation.zipCode"
+                  value={pickupLocation.zipCode}
+                  onChange={onChange}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Zip code"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="pickupDate" className="block text-sm font-medium text-gray-700 mb-1">
+                  Pickup Date
+                </label>
+                <input
+                  type="datetime-local"
+                  id="pickupDate"
+                  name="pickupDate"
+                  value={pickupDate}
+                  onChange={onChange}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
             </div>
 
-            <div>
-              <label htmlFor="deliveryLocation.address" className="block text-sm font-medium text-gray-700 mb-1">
-                Delivery Location
-              </label>
-              <input
-                type="text"
-                id="deliveryLocation.address"
-                name="deliveryLocation.address"
-                value={deliveryLocation.address}
-                onChange={onChange}
-                required
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Full delivery address"
-              />
-            </div>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="deliveryLocation.address" className="block text-sm font-medium text-gray-700 mb-1">
+                  Delivery Location
+                </label>
+                <input
+                  type="text"
+                  id="deliveryLocation.address"
+                  name="deliveryLocation.address"
+                  value={deliveryLocation.address}
+                  onChange={onChange}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Full delivery address"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="deliveryLocation.zipCode" className="block text-sm font-medium text-gray-700 mb-1">
+                  Delivery Zip Code
+                </label>
+                <input
+                  type="text"
+                  id="deliveryLocation.zipCode"
+                  name="deliveryLocation.zipCode"
+                  value={deliveryLocation.zipCode}
+                  onChange={onChange}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="Zip code"
+                />
+              </div>
 
-            <div>
-              <label htmlFor="pickupDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Pickup Date
-              </label>
-              <input
-                type="datetime-local"
-                id="pickupDate"
-                name="pickupDate"
-                value={pickupDate}
-                onChange={onChange}
-                required
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
+              <div>
+                <label htmlFor="deliveryDate" className="block text-sm font-medium text-gray-700 mb-1">
+                  Delivery Date
+                </label>
+                <input
+                  type="datetime-local"
+                  id="deliveryDate"
+                  name="deliveryDate"
+                  value={deliveryDate}
+                  onChange={onChange}
+                  required
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
             </div>
+          </div>
 
-            <div>
-              <label htmlFor="deliveryDate" className="block text-sm font-medium text-gray-700 mb-1">
-                Delivery Date
-              </label>
-              <input
-                type="datetime-local"
-                id="deliveryDate"
-                name="deliveryDate"
-                value={deliveryDate}
-                onChange={onChange}
-                required
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
+          {/* Distance Calculation */}
+          <div className="bg-gray-50 p-4 rounded-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium text-gray-700">Distance Calculation</h3>
+              <button
+                type="button"
+                onClick={calculateDistance}
+                disabled={calculateLoading || !mapsLoaded}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {calculateLoading ? 'Calculating...' : !mapsLoaded ? 'Loading Maps...' : 'Calculate Distance'}
+              </button>
             </div>
+            
+            {error && (
+              <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded-md">
+                {error}
+              </div>
+            )}
+            
+            {distance && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <h3 className="font-medium text-green-800 mb-2">Distance Results</h3>
+                <p className="text-green-700">
+                  <span className="font-bold">{distance.distanceText || `${distance.kilometers} km`}</span>
+                </p>
+                <p className="text-green-700">
+                  <span className="font-bold">{distance.miles}</span> miles
+                </p>
+                {distance.duration && (
+                  <p className="text-green-700 mt-2">
+                    <span className="font-medium">Estimated driving time:</span> {distance.duration}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Budget and Bidding */}

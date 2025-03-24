@@ -12,7 +12,8 @@ const {
   assignLoad,
   markLoadDelivered,
   markLoadCompleted,
-  cancelLoad
+  cancelLoad,
+  updateLoadStatus
 } = require('../../controllers/loads');
 const { protect, authorize } = require('../../middleware/auth');
 
@@ -30,6 +31,9 @@ router.route('/shipper/me')
 
 router.route('/available')
   .get(protect, authorize('trucker'), getAvailableLoads);
+
+router.route('/:id/status')
+  .put(protect, authorize('shipper'), updateLoadStatus);
 
 router.route('/:id/assign')
   .put(protect, authorize('shipper'), assignLoad);
